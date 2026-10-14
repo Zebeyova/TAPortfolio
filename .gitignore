@@ -1,0 +1,87 @@
+# Unity project ignore rules based on the official GitHub template.
+# This project intentionally excludes all Unity-generated .meta files.
+
+/.utmp/
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+*.log
+*.meta
+
+# Unity-generated and local editor files
+*.blend1
+*.blend1.meta
+/[Aa]ssets/Plugins/Editor/JetBrains*
+*.DotSettings.user
+.vs/
+.vscode/
+.idea/
+.gradle/
+ExportedObj/
+.consulo/
+*.csproj
+*.unityproj
+*.sln
+*.slnx
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Crash reports and local diagnostics
+sysinfo.txt
+mono_crash.*
+crashlytics-build.properties
+
+# Build packages
+*.apk
+*.aab
+*.unitypackage
+*.app
+*.ipa
+*.exe
+*.zip
+
+# TestRunner generated files
+InitTestScene*.unity*
+
+# Addressables generated output
+/ServerData
+/[Aa]ssets/StreamingAssets/aa*
+/[Aa]ssets/AddressableAssetsData/link.xml*
+/[Aa]ssets/Addressables_Temp*
+/[Aa]ssets/AddressableAssetsData/*/*.bin*
+
+# Visual Scripting generated files
+/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db
+/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Core/Property Providers
+
+# UI Toolkit generated files
+/UIElementsSchema/
+
+# Auto-generated scene dependency cache
+/[Aa]ssets/[Ss]ceneDependencyCache*
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local environment and credentials
+.env
+.env.*
+*.local
+*.pfx
+*.keystore
+*.jks
