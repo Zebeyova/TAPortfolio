@@ -41,6 +41,7 @@ Material:
     - _LightIntensity: 4.65
     - _ShadowSoftness: 0
     - _ShadowThreshlod: 0.476
+    - _ShadowThreshold: 0.5
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
     - _ShadowTint: {r: 0.54999995, g: 0.6, b: 0.65, a: 1}
