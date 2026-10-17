@@ -73,6 +73,11 @@ InitTestScene*.unity*
 # Auto-generated scene dependency cache
 /[Aa]ssets/[Ss]ceneDependencyCache*
 
+# Generated lighting bake data
+/[Aa]ssets/**/LightingData.asset
+/[Aa]ssets/**/Lightmap-*
+/[Aa]ssets/**/ReflectionProbe-*.exr
+
 # Operating-system metadata
 .DS_Store
 Thumbs.db
