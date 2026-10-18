@@ -48,6 +48,7 @@ Cloud Shader 通常不是普通物体的基础 Lit Shader。它可能包含体�
 6. 计算 `NdotL`，表示表面朝向主光的程度。
 7. 用 `NdotL` 作为 Ramp 的横坐标。
 8. 将 Ramp 结果应用到直接光，将环境光单独保留。
+9. 使用 `AdditionalLight` 函数循环处理 URP 提供的点光源和聚光灯。
 
 当前核心表达式是：
 
@@ -61,6 +62,148 @@ half3 rampColor = SAMPLE_TEXTURE2D(
 
 half3 finalCol = albedo.rgb * (rampColor * directLight + ambientLight);
 ```
+
+## 附加光源的基本结构
+
+附加光源指主方向光之外的点光源和聚光灯。它们不能共用主光的 `NdotL`，因为每一盏灯的方向、距离和衰减都不同。
+
+基本流程是：
+
+```hlsl
+uint addLightCount = GetAdditionalLightsCount();
+
+LIGHT_LOOP_BEGIN(addLightCount)
+    Light additionalLight = GetAdditionalLight(lightIndex, positionWS);
+    half additionalNdotL = saturate(dot(normalWS, additionalLight.direction));
+    half3 additionalRampCol = SAMPLE_TEXTURE2D(
+        _RampTex,
+        sampler_RampTex,
+        float2(additionalNdotL, 0.5)
+    ).rgb;
+
+    additionalLightCol +=
+        additionalRampCol *
+        additionalLight.color *
+        additionalLight.distanceAttenuation *
+        additionalLight.shadowAttenuation;
+LIGHT_LOOP_END
+```
+
+可以把每次循环理解为“处理一盏灯”：
+
+- `GetAdditionalLightsCount()`：取得当前物体附近、允许参与渲染的附加光数量。
+- `GetAdditionalLight(...)`：取得当前编号的灯，包括方向、颜色、距离衰减和阴影衰减。
+- `additionalNdotL`：计算表面是否朝向这一盏灯。
+- `additionalRampCol`：使用这盏灯自己的受光强度采样 Ramp。
+- `additionalLightCol +=`：把当前灯的结果累加到附加光总颜色。
+
+最终颜色可以写成：
+
+```hlsl
+half3 finalCol = albedo.rgb *
+    (rampCol * directLight + ambientLight + additionalLightCol);
+```
+
+附加光变体要单独声明，不能和主光阴影选项写在同一个五选一列表中：
+
+```hlsl
+#pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
+#pragma multi_compile _ _ADDITIONAL_LIGHTS
+#pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
+#pragma multi_compile_fragment _ _SHADOWS_SOFT
+```
+
+如果把 `_ADDITIONAL_LIGHTS` 直接放到主光阴影那一行，Unity 会把它当成同一组互斥选项，可能导致启用主光阴影时没有附加光变体。
+
+## 附加光阴影不是另外手写一套算法
+
+`GetAdditionalLight(...)` 会返回一个 `Light` 结构，其中已经包含：
+
+```hlsl
+additionalLight.distanceAttenuation
+additionalLight.shadowAttenuation
+```
+
+因此附加光的阴影读取通常只需要使用：
+
+```hlsl
+additionalLight.shadowAttenuation
+```
+
+不需要在当前 Shader 中重新采样点光源阴影贴图。`UsePass` 负责让物体投射阴影，`GetAdditionalLight` 负责在接收物体上取得附加光的光照和阴影结果。
+
+要看到真正的附加光投影阴影，需要同时确认：
+
+- 当前 URP Asset 开启 Additional Light Shadows。
+- 点光源或聚光灯的 Shadow Type 不是 None。
+- 点光源、遮挡物和接收物体的 Layer/Culling Mask 正确。
+- 当前使用的是支持附加光阴影的 URP Asset。
+
+项目中当前配置的差异如下：
+
+```text
+URP-Performant.asset：附加光 Per Vertex，附加光阴影关闭
+URP-Balanced.asset：附加光 Per Pixel，附加光阴影关闭
+URP-HighFidelity.asset：附加光 Per Pixel，附加光阴影开启
+```
+
+所以如果当前运行时使用的是 Performant 或 Balanced，点光源仍然可以产生光照和距离衰减，但不会产生真正的附加光阴影。
+
+## 如何判断普通 Forward 和 Forward+
+
+在当前 Unity 2022.3 / URP 14 项目中，选中当前使用的 Renderer Data，在 Inspector 查看 `Rendering Mode`：
+
+```text
+Forward：普通 Forward
+Forward+：Forward+
+Deferred：Deferred
+```
+
+项目中的 Renderer 资产还可以从序列化字段判断：
+
+```text
+m_ClusteredRendering: 0
+```
+
+表示没有启用 Forward+ clustered rendering。当前 `URP-Performant-Renderer` 和 `URP-Balanced-Renderer` 都是普通 Forward。`Additional Lights = Per Pixel` 只表示附加光的计算频率，不等于 Forward+。
+
+普通 Forward 下使用：
+
+```hlsl
+uint addLightCount = GetAdditionalLightsCount();
+LIGHT_LOOP_BEGIN(addLightCount)
+```
+
+是合适的起点。只有切换到 Forward+ 后，才需要按 Forward+ 的光源遍历方式补充相应宏和逻辑。
+
+## 点光源过近出现方形阴影
+
+点光源离物体非常近时，方形或块状阴影通常来自点光源阴影贴图、Bias、Normal Bias、Near Plane 或阴影分辨率，而不是 Ramp 本身。
+
+排查时可以临时去掉：
+
+```hlsl
+additionalLight.shadowAttenuation
+```
+
+只保留距离衰减：
+
+```hlsl
+additionalLightCol +=
+    additionalRampCol *
+    additionalLight.color *
+    additionalLight.distanceAttenuation;
+```
+
+如果方形区域消失，说明问题在附加光阴影贴图设置；如果仍然存在，则继续检查 Ramp、法线贴图和色阶参数。
+
+点光源阴影的检查顺序：
+
+1. 暂时使用 Hard Shadows，区分阴影贴图问题和软阴影采样问题。
+2. 适当调整点光源的 Bias、Normal Bias 和 Near Plane。
+3. 将点光源稍微移离物体，避免几乎贴在表面上。
+4. 提高 URP Asset 的 Additional Light Shadow Resolution。
+5. 确认当前使用的是开启 `m_AdditionalLightShadowsSupported` 的 URP Asset。
 
 ## 为什么 Ramp 没有硬过渡
 
@@ -237,9 +380,8 @@ _ShadowTint
 
 ## 推荐的后续实现顺序
 
-1. 接入 `_NormalMap` 和 TBN 法线转换。
-2. 验证法线贴图是否改变 `NdotL` 和 Ramp 分区。
-3. 加入附加光源，让点光源和聚光灯也能参与基础风格化光照。
-4. 再决定是否使用 `_ShadowThreshlod`、`_ShadowSoftness` 和 `_ShadowTint` 做额外的阴影染色。
+1. 验证附加光循环在点光源和聚光灯下的颜色、距离衰减和 Ramp 分区。
+2. 根据实际使用的 URP Asset 决定是否启用附加光阴影。
+3. 解决点光源近距离阴影贴图的 Bias、Near Plane 和分辨率问题。
+4. 再决定是否使用 `_ShadowThreshold`、`_ShadowSoftness` 和 `_ShadowTint` 做额外的阴影染色。
 5. 最后再考虑 Fresnel、雾、Lightmap、Meta、DepthOnly 和其他专用 Shader 功能。
-

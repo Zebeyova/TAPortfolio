@@ -9,9 +9,14 @@ Shader "Zebeyova/URP/StylizedLight" {
         _RampTex ("Ramp Tex", 2D) = "white" {}
 
         _AmbientIntensity ("Ambient Intensity", Range(0, 5)) = 0.25
+
         _ShadowThreshold ("Shadow Threshold", Range(0,1)) = 0.5
-        _ShadowSoftness ("Shadow Softness", Range(0,0.5)) = 0.1
-        _ShadowTint ("Shadow Tint", Color) =  (0.55, 0.6, 0.65, 1)
+        _ShadowSoftness ("Shadow Softness", Range(0,0.2)) = 0.1
+        _ShadowTint ("Shadow Tint", Color) =  (0.75, 0.8, 0.85, 1)
+
+        _RimColor ("Rim Color", Color) =  (0.5, 0.7, 1, 1)
+        _RimPower ("Rim Power", Range(0.5,8)) = 3
+        _RimStrength ("Rim Strength", Range(0,2)) = 0.25
     }
 
     SubShader {
@@ -27,8 +32,14 @@ Shader "Zebeyova/URP/StylizedLight" {
             #pragma fragment Frag
             #pragma target 2.0
 
+            //主光
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
+            //附加光
+            #pragma multi_compile _ _ADDITIONAL_LIGHTS
+            #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
+            //雾效
+            #pragma multi_compile_fog
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             //光照
@@ -51,6 +62,7 @@ Shader "Zebeyova/URP/StylizedLight" {
                 float3 tangentWS : TEXCOORD4;
                 float3 bitangentWS : TEXCOORD5;
                 float4 shadowCoord : TEXCOORD3;
+                half fogFactor : TEXCOORD6;
             };
 
             TEXTURE2D(_BaseMap);
@@ -65,10 +77,35 @@ Shader "Zebeyova/URP/StylizedLight" {
             float4 _BaseColor;
             float _AmbientIntensity;
 
-            float _ShadowThreshlod;
+            float _ShadowThreshold;
             float _ShadowSoftness;
             float4 _ShadowTint;
+
+            float4 _RimColor;
+            float _RimPower;
+            float _RimStrength;
             CBUFFER_END
+
+            half3 AdditionalLight(half3 positionWS, half3 normalWS) {
+                half3 additionalLightCol = 0;
+                #if defined(_ADDITIONAL_LIGHTS)
+                uint addLightCount = GetAdditionalLightsCount();
+
+                LIGHT_LOOP_BEGIN(addLightCount)
+
+                Light additionalLight = GetAdditionalLight(lightIndex, positionWS, half4(1, 1, 1, 1));
+                half additionalNdotL = saturate(dot(normalWS, additionalLight.direction));
+                half3 additionalRampCol = SAMPLE_TEXTURE2D(_RampTex, sampler_RampTex, float2(additionalNdotL, 0.5)).rgb;
+                half additionalShadowBand = smoothstep((_ShadowThreshold - _ShadowSoftness), (_ShadowThreshold + _ShadowSoftness), additionalNdotL);
+                additionalRampCol = lerp(additionalRampCol * _ShadowTint, additionalRampCol, additionalShadowBand);
+
+                additionalLightCol += additionalRampCol * additionalLight.color * additionalLight.distanceAttenuation * additionalLight.shadowAttenuation;
+
+                LIGHT_LOOP_END
+                #endif
+
+                return additionalLightCol;
+            }
 
             Varyings Vert(Attributes input) {
                 Varyings output;
@@ -83,6 +120,7 @@ Shader "Zebeyova/URP/StylizedLight" {
 
                 output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
                 output.shadowCoord = GetShadowCoord(vertexInput);
+                output.fogFactor = ComputeFogFactor(output.positionCS.z);
 
                 return output;
             }
@@ -94,6 +132,8 @@ Shader "Zebeyova/URP/StylizedLight" {
 
                 //世界空间法线
                 half3 normalWS = normalize(input.tangentWS * normalTS.x + input.bitangentWS * normalTS.y + input.normalWS * normalTS.z);
+                //世界空间视线方向
+                half3 viewDirWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
                 //环境光
                 half3 ambient = SampleSH(normalWS);
                 //主光源-平行光
@@ -101,26 +141,31 @@ Shader "Zebeyova/URP/StylizedLight" {
 
                 //受光范围（是否正对光源）
                 half NdotL = saturate(dot(normalWS, mainLight.direction));
+                //视线范围（是否正对视线方向）
+                half NdotV = saturate(dot(normalWS, viewDirWS));
                 //漫反射颜色
                 half4 albedo = baseColor * _BaseColor;
                 //直接光漫反射
                 half3 directLight = mainLight.color * mainLight.distanceAttenuation * mainLight.shadowAttenuation;
                 //间接光漫反射
                 half3 ambientLight = ambient * _AmbientIntensity;
+                //附加光源
+                half3 additionalLightCol = AdditionalLight(input.positionWS, normalWS);
 
                 // 风格化色阶
-                // half lightBand = smoothstep((_ShadowThreshlod - _ShadowSoftness), (_ShadowThreshlod + _ShadowSoftness), NdotL);
-                // 阴影区颜色
-                // half3 shadowColor = albedo.rgb * _ShadowTint.rgb;
-                // 受光区颜色
-                // half3 litColor = albedo.rgb * directLight;
-                // half3 finalCol = albedo.rgb * ambientLight + lerp(shadowColor, litColor, lightBand);
-
-                //使用Ramp替代色阶
                 half3 rampColor = SAMPLE_TEXTURE2D(_RampTex, sampler_RampTex, float2(NdotL, 0.5)).rgb;
+                half shadowBand = smoothstep((_ShadowThreshold - _ShadowSoftness), (_ShadowThreshold + _ShadowSoftness), NdotL);
+                // 阴影区颜色
+                half3 shadowRampCol = rampColor * _ShadowTint.rgb;
+                rampColor = lerp(shadowRampCol, rampColor, shadowBand);
 
-                half3 finalCol = albedo.rgb * (rampColor * directLight + ambientLight);
-                return half4(finalCol, albedo.a);
+                //边缘光
+                half rim = pow(1.0 - NdotV, _RimPower);
+                half3 rimColor = (rim * _RimColor.rgb * _RimStrength);
+
+                half3 finalColor = albedo.rgb * (rampColor * directLight + ambientLight + additionalLightCol) + rimColor;
+                finalColor = MixFog(finalColor, input.fogFactor);
+                return half4(finalColor, albedo.a);
             }
 
             ENDHLSL
