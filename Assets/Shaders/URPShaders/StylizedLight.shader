@@ -17,6 +17,10 @@ Shader "Zebeyova/URP/StylizedLight" {
         _RimColor ("Rim Color", Color) =  (0.5, 0.7, 1, 1)
         _RimPower ("Rim Power", Range(0.5,8)) = 3
         _RimStrength ("Rim Strength", Range(0,2)) = 0.25
+
+        _SpecularColor ("Specular Color", Color) =  (1, 1, 1, 1)
+        _SpecularPower ("Specular Power", Range(1,128)) = 32
+        _SpecularStrength ("Specular Strength", Range(0,1)) = 1
     }
 
     SubShader {
@@ -84,6 +88,10 @@ Shader "Zebeyova/URP/StylizedLight" {
             float4 _RimColor;
             float _RimPower;
             float _RimStrength;
+
+            float4 _SpecularColor;
+            float _SpecularPower;
+            float _SpecularStrength;
             CBUFFER_END
 
             half3 AdditionalLight(half3 positionWS, half3 normalWS) {
@@ -97,7 +105,7 @@ Shader "Zebeyova/URP/StylizedLight" {
                 half additionalNdotL = saturate(dot(normalWS, additionalLight.direction));
                 half3 additionalRampCol = SAMPLE_TEXTURE2D(_RampTex, sampler_RampTex, float2(additionalNdotL, 0.5)).rgb;
                 half additionalShadowBand = smoothstep((_ShadowThreshold - _ShadowSoftness), (_ShadowThreshold + _ShadowSoftness), additionalNdotL);
-                additionalRampCol = lerp(additionalRampCol * _ShadowTint, additionalRampCol, additionalShadowBand);
+                additionalRampCol = lerp(additionalRampCol * _ShadowTint.rgb, additionalRampCol, additionalShadowBand);
 
                 additionalLightCol += additionalRampCol * additionalLight.color * additionalLight.distanceAttenuation * additionalLight.shadowAttenuation;
 
@@ -143,6 +151,7 @@ Shader "Zebeyova/URP/StylizedLight" {
                 half NdotL = saturate(dot(normalWS, mainLight.direction));
                 //视线范围（是否正对视线方向）
                 half NdotV = saturate(dot(normalWS, viewDirWS));
+
                 //漫反射颜色
                 half4 albedo = baseColor * _BaseColor;
                 //直接光漫反射
@@ -152,6 +161,13 @@ Shader "Zebeyova/URP/StylizedLight" {
                 //附加光源
                 half3 additionalLightCol = AdditionalLight(input.positionWS, normalWS);
 
+                //Blinn-phong
+                half3 halfDir = normalize(mainLight.direction + viewDirWS);
+                half NdotH = saturate(dot(normalWS, halfDir));
+
+                half specular = pow(NdotH, _SpecularPower) * _SpecularStrength;
+                half3 specularColor = specular * _SpecularColor.rgb * directLight;
+
                 // 风格化色阶
                 half3 rampColor = SAMPLE_TEXTURE2D(_RampTex, sampler_RampTex, float2(NdotL, 0.5)).rgb;
                 half shadowBand = smoothstep((_ShadowThreshold - _ShadowSoftness), (_ShadowThreshold + _ShadowSoftness), NdotL);
@@ -159,11 +175,16 @@ Shader "Zebeyova/URP/StylizedLight" {
                 half3 shadowRampCol = rampColor * _ShadowTint.rgb;
                 rampColor = lerp(shadowRampCol, rampColor, shadowBand);
 
+                half3 litColor = rampColor * mainLight.color * mainLight.distanceAttenuation + ambientLight;
+                half3 shadowColor = ambientLight * _ShadowTint.rgb;
+                half3 mainLightColor = lerp(shadowColor, litColor, mainLight.shadowAttenuation);
+
                 //边缘光
                 half rim = pow(1.0 - NdotV, _RimPower);
                 half3 rimColor = (rim * _RimColor.rgb * _RimStrength);
 
-                half3 finalColor = albedo.rgb * (rampColor * directLight + ambientLight + additionalLightCol) + rimColor;
+                // half3 finalColor = albedo.rgb * (rampColor * directLight + ambientLight + additionalLightCol) + rimColor + specularColor;
+                half3 finalColor = albedo.rgb * (mainLightColor + additionalLightCol) + rimColor + specularColor;
                 finalColor = MixFog(finalColor, input.fogFactor);
                 return half4(finalColor, albedo.a);
             }
