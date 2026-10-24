@@ -37,14 +37,18 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _AmbientIntensity: 1.5
-    - _LightIntensity: 4.65
-    - _ShadowSoftness: 0
-    - _ShadowThreshlod: 0.476
-    - _ShadowThreshold: 0.5
+    - _AmbientIntensity: 0.3
+    - _RimPower: 4
+    - _RimStrength: 0
+    - _ShadowSoftness: 0.05
+    - _ShadowThreshold: 0.45
+    - _SpecularPower: 30
+    - _SpecularStrength: 0
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
-    - _ShadowTint: {r: 0.54999995, g: 0.6, b: 0.65, a: 1}
+    - _RimColor: {r: 0.5831256, g: 0.8482312, b: 0.9811321, a: 1}
+    - _ShadowTint: {r: 0.75, g: 0.8, b: 0.85, a: 1}
+    - _SpecularColor: {r: 1, g: 1, b: 1, a: 1}
   m_BuildTextureStacks: []
 --- !u!114 &5755613225952523470
 MonoBehaviour:
