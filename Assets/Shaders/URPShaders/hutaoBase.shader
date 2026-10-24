@@ -8,9 +8,11 @@ Shader "Zebeyova/URP/hutaoBase" {
         _RampTex ("Ramp Tex", 2D) = "white" {}
         _AmbientIntensity ("Ambient Intensity", Range(0, 5)) = 0.25
 
-        _ShadowBands ("Shadow Bands", float) = 1
+        [IntRange]
+        _ShadowBands ("Shadow Bands", Range(1,10)) = 2
         _ShadowSoftness ("Shadow Softness", Range(0,0.2)) = 0.1
         _ShadowBrightness ("Shadow Brightness", float) = 1
+        _ShadowThreshold ("Shadow Threshold", Range(0,1)) = 0.5
     }
 
     SubShader {
@@ -24,6 +26,7 @@ Shader "Zebeyova/URP/hutaoBase" {
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 2.0
+            #pragma multi_compile
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -39,7 +42,7 @@ Shader "Zebeyova/URP/hutaoBase" {
             struct Varyings {
                 float2 uv : TEXCOORD0;
                 float4 positionCS : SV_POSITION;
-                float2 positionWS : TEXCOORD1;
+                float3 positionWS : TEXCOORD1;
                 float3 normalWS : TEXCOORD2;
                 float3 tangentWS : TEXCOORD3;
                 float3 bitangentWS : TEXCOORD4;
@@ -58,6 +61,7 @@ Shader "Zebeyova/URP/hutaoBase" {
             float _ShadowBands;
             float _ShadowSoftness;
             float _ShadowBrightness;
+            float _ShadowThreshold;
             CBUFFER_END
 
             Varyings Vert(Attributes input) {
@@ -81,18 +85,15 @@ Shader "Zebeyova/URP/hutaoBase" {
                 half4 color = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv);
                 half3 normalWS = normalize(input.normalWS);
                 Light mainLight = GetMainLight(input.shadowCoord);
-                half NdotL = saturate(dot(normalWS, mainLight.direction));
+                half NdotL = saturate((dot(normalWS, mainLight.direction) + 1) / 2);
                 half4 albedo = color * _BaseColor;
                 half3 ambient = SampleSH(normalWS);
                 half3 indirectLight = ambient * _AmbientIntensity;
 
                 half lighting = saturate(NdotL * mainLight.shadowAttenuation);
 
-                half bandCount = max(round(_ShadowBands), 2.0);
-                half bandIndex = min(floor(lighting * bandCount), bandCount - 1.0);
-                half bandUV = bandIndex / (bandCount - 1.0);
-
-                half3 rampColor = SAMPLE_TEXTURE2D(_RampTex, sampler_RampTex, half2(bandUV, 0.5)).rgb;
+                half bandIndex = smoothstep(_ShadowThreshold - _ShadowSoftness, _ShadowThreshold + _ShadowSoftness, lighting);
+                half3 rampColor = SAMPLE_TEXTURE2D(_RampTex, sampler_RampTex, half2(NdotL, 0.5)).rgb;
 
                 half3 directLight = rampColor * mainLight.color;
                 half3 finalRGB = albedo.rgb * (directLight + indirectLight);
@@ -102,4 +103,5 @@ Shader "Zebeyova/URP/hutaoBase" {
             ENDHLSL
         }
     }
+    Fallback "ShadowCaster.shader"
 }
