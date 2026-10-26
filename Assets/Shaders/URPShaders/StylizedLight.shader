@@ -27,7 +27,7 @@ Shader "Zebeyova/URP/StylizedLight" {
         Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" }
 
         Pass {
-            Name "UniversalForward"
+            Name "StylizedLight"
             Tags { "LightMode" = "UniversalForward" }
 
             HLSLPROGRAM

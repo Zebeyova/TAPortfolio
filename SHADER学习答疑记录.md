@@ -385,3 +385,152 @@ _ShadowTint
 3. 解决点光源近距离阴影贴图的 Bias、Near Plane 和分辨率问题。
 4. 再决定是否使用 `_ShadowThreshold`、`_ShadowSoftness` 和 `_ShadowTint` 做额外的阴影染色。
 5. 最后再考虑 Fresnel、雾、Lightmap、Meta、DepthOnly 和其他专用 Shader 功能。
+
+## 胡桃 Shader（hutaoBase）遇到的问题
+
+文件：`Assets/Shaders/URPShaders/hutao/hutaoBase.shader`
+
+### 原神风格不适合加环境光
+
+`SampleSH` 环境光会把暗面整体提亮，画面发灰，失去卡通渲染需要的明暗对比。原神风格以主光源和手绘明暗为主，暗面的轮廓感用 Rim Light 补充，不用环境光。
+
+### 高光像油膜
+
+Blinn-Phong 高光作用在所有表面上，布料和皮肤也有高光，看起来像一层油膜。原神的高光位置由贴图控制，所以加入 `_SpecularTex` 作为遮罩：
+
+```hlsl
+half specularMaskTex = SAMPLE_TEXTURE2D(_SpecularTex, sampler_SpecularTex, input.uv).r;
+half3 specularLight = specularMaskTex * specularMask * _SpecularColor.rgb * _SpecularIntensity;
+```
+
+遮罩是灰度图，只取 `.r`。白色表示有高光（头发高光带、金属饰品），黑色表示没有高光。高光颜色由 `_SpecularColor` 控制。
+
+### CrazyBump 生成法线的取舍
+
+CrazyBump 根据颜色明暗推算高度，会把画在贴图上的颜色当成凹凸：
+
+- 脸：眉毛、眼线、嘴是画上去的，会被算成凸起或凹陷。脸不使用法线贴图。
+- 头发：颜色渐变和手绘发丝会变成坡度和沟槽，而且贴图本身已经画了明暗。头发不使用法线贴图。
+- 衣服：可以使用，但只保留花纹细节。`Very Large Detail` 设为 0，`Large Detail` 调低，否则大块颜色会被当成坡度，整片布料的明暗分界线会跑偏。
+
+法线贴图导出为 PNG，在 Unity 中把 Texture Type 设为 `Normal map`。不挂法线贴图的材质使用默认值 `"bump"`，也就是平面法线。
+
+### `_NormalScale` 乘在了 UV 上
+
+错误写法：
+
+```hlsl
+SAMPLE_TEXTURE2D(_NormalTex, sampler_NormalTex, input.uv * _NormalScale)
+```
+
+这样改变的是采样坐标，法线图会平铺多次，凹凸强度没有变化。强度应该在解码时控制：
+
+```hlsl
+half3 normalTS = UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalTex, sampler_NormalTex, input.uv), _NormalScale);
+```
+
+### `_ShadowBrightness` 默认值为 1
+
+`shadowColor = litColor * _ShadowBrightness`，默认值为 1 时暗面和亮面颜色一样，看不出色阶。改为 `Range(0, 1)`，默认值 0.5。
+
+### 三阶色阶与 Ramp
+
+Ramp 图本身是三段纯色，所以已经是三阶色阶。需要注意：
+
+- Ramp 的 U 坐标是 `halfLambert`，0 为背光，1 为正对光源，所以图片应该左暗右亮。
+- 图片反转后，每段颜色对应的 halfLambert 区间也跟着反转。最暗的一段如果太窄，只有几乎完全背光时才会出现。
+- 黑白 Ramp 作为光照系数使用时，在 Linear 色彩空间下要取消 sRGB，否则中间调会比 PS 里看到的暗很多。
+- 硬边 Ramp 使用 `Point` 过滤和 `Clamp` 模式。
+
+投射阴影可以合并到 Ramp 的采样坐标里，让投影落在 Ramp 的暗段：
+
+```hlsl
+float2(halfLambert * mainLight.shadowAttenuation, 0.5)
+```
+
+### 用 HLSLINCLUDE 共用 CBUFFER
+
+多个 Pass 需要读取同一组材质参数，例如描边 Pass 要用 `_OutlineWidth`。同时为了兼容 SRP Batcher，所有 Pass 的 `UnityPerMaterial` 内容必须完全一致。做法是把 include、贴图声明和 CBUFFER 放到 SubShader 下的 `HLSLINCLUDE ... ENDHLSL` 中，各个 Pass 共用。
+
+### ShadowCaster Pass 编译报错
+
+报错一：
+
+```text
+redefinition of '_BaseMap' at .../ShaderLibrary/SurfaceInput.hlsl
+```
+
+原因：ShadowCaster Pass 引入了 `LitInput.hlsl`，这个文件会再声明一次 `_BaseMap` 和 URP/Lit 自己的 CBUFFER，与 `HLSLINCLUDE` 中的声明冲突。处理方式：不引入 `LitInput.hlsl`。
+
+报错二：
+
+```text
+undeclared identifier 'LerpWhiteTo' at .../ShaderLibrary/Shadows.hlsl
+```
+
+原因：去掉 `LitInput.hlsl` 后，`ShadowCasterPass.hlsl` 依赖的光照和阴影函数没有被引入。处理方式：在 `HLSLINCLUDE` 中引入 `Lighting.hlsl`，ShadowCaster Pass 中只引入 `ShadowCasterPass.hlsl`。
+
+另外，`Fallback "ShadowCaster.shader"` 指向的 Shader 不存在，不能用它来补充阴影投射。
+
+### 描边外扩公式写成了乘法
+
+错误写法：
+
+```hlsl
+float3 expandedPos = input.positionOS.xyz * input.normalOS * _OutlineWidth;
+```
+
+乘法会把顶点挤到原点附近，模型会变形。沿法线外扩应该用加法：
+
+```hlsl
+float3 expandedPos = input.positionOS.xyz + input.normalOS * _OutlineWidth;
+```
+
+片元函数要写上返回语义 `: SV_Target`。
+
+### 描边 Pass 不执行
+
+现象：Frame Debugger 中胡桃只绘制了一次，只有 `UniversalForward (0)`，`LightMode` 一栏显示 `-`，没有 OutLine Pass。
+
+原因：`Name` 只是 Pass 的名字，不是 `LightMode`。第一个 Pass 只写了 `Name "UniversalForward"`，没有写 Tags。**没有 `LightMode` 的 Pass，URP 默认把它当作 `SRPDefaultUnlit`。** 描边 Pass 也是 `SRPDefaultUnlit`，而同一个 `LightMode` 每个物体只执行第一个匹配的 Pass，所以描边被跳过了。
+
+处理方式：两个 Pass 使用不同的 `LightMode`。
+
+```hlsl
+Pass {
+    Name "UniversalForward"
+    Tags { "LightMode" = "UniversalForward" }
+    ...
+}
+
+Pass {
+    Name "OutLine"
+    Tags { "LightMode" = "SRPDefaultUnlit" }
+    Cull Front
+    ...
+}
+```
+
+注意：
+
+- 改成 `Tags { "Queue" = "Geometry+1" }` 解决不了问题。Pass 里没有 `LightMode` 仍然会被当作 `SRPDefaultUnlit`，而且 `Queue` 是 SubShader 级别的 Tag，写在 Pass 里不起作用。
+- 排查 Pass 是否执行时，看 Frame Debugger 中的 `LightMode` 一栏，比看 Pass 名字可靠。
+
+### 描边宽度与模型缩放
+
+物体空间外扩的宽度和模型单位有关。MMD 转换的 FBX 导入时经常带 0.01 或 100 的缩放，同一个 `_OutlineWidth` 可能粗得离谱，也可能细到看不见。先检查模型 Import Settings 中的 `Scale Factor`，再调整 Range。修改属性的 Range 后，材质里可能还保留着旧值，需要重新拖一下滑条。
+
+以后改成裁剪空间外扩，描边在屏幕上的粗细就不再受距离和模型缩放影响。
+
+## 胡桃 Shader（hutaoBase）待办
+
+- [x] 二阶色阶（halfLambert + smoothstep）
+- [x] Rim Light
+- [x] 高光 + 高光遮罩贴图（_SpecularTex）
+- [x] 法线贴图（TBN）
+- [x] 阴影接收与 ShadowCaster Pass
+- [ ] 描边（法线外扩 Outline Pass）← 进行中，待验证 LightMode 修改
+- [ ] 描边改为裁剪空间外扩
+- [ ] 硬边处描边断开：把平滑法线烘焙到顶点色或 UV2
+- [ ] 脸部 SDF 阴影：根据头部朝向和光源方向采样脸部阴影图，替代脸部的 NdotL
+- [ ] 头发各向异性高光（Kajiya-Kay）：用切线/副切线方向计算沿发丝的条状高光，配合头发高光遮罩
