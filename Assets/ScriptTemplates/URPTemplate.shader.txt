@@ -10,7 +10,7 @@ Shader "Zebeyova/URP/#SCRIPTNAME#" {
         Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" }
 
         Pass {
-            Name "name"
+            Name "#SCRIPTNAME#"
             Tags { "LightMode" = "UniversalForward" }
 
             HLSLPROGRAM

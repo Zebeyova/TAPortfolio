@@ -1,0 +1,16 @@
+{
+  "name": "com.amlovey.omni-shader",
+  "displayName": "Omni Shader Tools for Unity",
+  "version": "1.0.2",
+  "unity": "2021.3",
+  "description": "Omni Shader Tools For Unity is a powerful toolset for Unity developers, designed to streamline shader development and enhance your workflow. Explore the features through the navigation menu on the left and take your Unity projects to the next level.",
+  "keywords": [
+    "Shaderlab",
+    "Unity Shader"
+  ],
+  "documentationUrl": "https://omnishader.amlovey.com/docs/?doc=unity-editor",
+  "repository": {
+    "url": "https://github.com/OmniShader/OmniShaderUnity",
+    "type": "git"
+  }
+}
