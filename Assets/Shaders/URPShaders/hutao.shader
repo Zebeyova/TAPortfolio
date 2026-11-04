@@ -103,7 +103,7 @@ Shader "Zebeyova/URP/hutaoBase" {
             #pragma shader_feature_local _SPECULAR_ON
             #pragma vertex Vert
             #pragma fragment Frag
-            #pragma target 2.0
+            #pragma target 3.0
 
             struct Attributes {
                 float2 uv : TEXCOORD0;
@@ -158,7 +158,7 @@ Shader "Zebeyova/URP/hutaoBase" {
 
                 half NdotL = dot(normalWS, mainLight.direction);
                 half halfLambert = NdotL * 0.5 + 0.5;
-                half3 rampColor = SAMPLE_TEXTURE2D(_RampTex, sampler_RampTex, float2(0.5, halfLambert * mainLight.shadowAttenuation)).rgb;
+                half3 rampColor = SAMPLE_TEXTURE2D(_RampTex, sampler_RampTex, float2(halfLambert * mainLight.shadowAttenuation, 0.5)).rgb;
                 half shadow = smoothstep(_ShadowThreshold - _ShadowSoftness, _ShadowThreshold + _ShadowSoftness, halfLambert);
                 half3 litColor = baseColor.xyz * _BaseColor.xyz;
                 half3 shadowColor = litColor * rampColor;

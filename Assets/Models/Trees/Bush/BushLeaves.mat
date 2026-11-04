@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: BushLeaves
-  m_Shader: {fileID: 4800000, guid: 0f96a2937f6bace459a5fdaac39c0fb3, type: 3}
+  m_Shader: {fileID: 4800000, guid: 8aac89f9f34e8a44a9bffa232d84a709, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -33,6 +33,10 @@ Material:
     - _Albedo:
         m_Texture: {fileID: 2800000, guid: f702406db7a985649ade93cb60009e67, type: 3}
         m_Scale: {x: 2, y: 2}
+        m_Offset: {x: 0, y: 0}
+    - _AlbedoTex:
+        m_Texture: {fileID: 2800000, guid: 5a5cbdfc6d6849d596237fc6619208ff, type: 3}
+        m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _BranchMask:
         m_Texture: {fileID: 2800000, guid: 296d8bd5dac2bef43b444df76b60a97f, type: 3}
@@ -90,6 +94,10 @@ Material:
         m_Texture: {fileID: 2800000, guid: b4f28834134b44c79d6323ec38e7a6ab, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _NormalTex:
+        m_Texture: {fileID: 2800000, guid: b4f28834134b44c79d6323ec38e7a6ab, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _Occlusion:
         m_Texture: {fileID: 2800000, guid: 81d15ccb13b2f05459ca10beaeae6fbd, type: 3}
         m_Scale: {x: 1, y: 1}
@@ -100,6 +108,10 @@ Material:
         m_Offset: {x: 0, y: 0}
     - _ParallaxMap:
         m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _RampTex:
+        m_Texture: {fileID: 2800000, guid: f367c4faeaf0690448d7b51f0466d44d, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Texture0:
@@ -137,6 +149,7 @@ Material:
     m_Ints: []
     m_Floats:
     - _AlphaCutoff: 0.5
+    - _AmbientIntensity: 0.25
     - _BaseWind: 2
     - _BaseWindChannel: 0
     - _Bias: 1
@@ -144,6 +157,7 @@ Material:
     - _BranchPhase1: 1.05
     - _BumpScale: 1
     - _ColorVariationPower: 1
+    - _CutOff: 0.05
     - _Cutoff: 0.3
     - _DetailNormalMapScale: 1
     - _Dither: 3
@@ -161,15 +175,18 @@ Material:
     - _GlossMapScale: 1
     - _Glossiness: 0
     - _GlossyReflections: 1
+    - _GradientCenter: 0.4
     - _GradientFalloff: 0
     - _GradientFaloff: 1
     - _GradientPosition: 0
+    - _GradientRange: 0.5
     - _HideHardAngles: 1
     - _HidePower: 3
     - _HideSides: 1
     - _Int0: 0
     - _InvertGradient: 0
     - _Keyword0: 0
+    - _LightIntensity: 2
     - _Metallic: 0
     - _MicroFrequency: 5
     - _MicroPower: 0.1
@@ -182,6 +199,7 @@ Material:
     - _NormalAttenuation: 1
     - _NormalDistortion: 1
     - _NormalPower: 0.515
+    - _NormalScale: 0.5
     - _OcclusionStrength: 1
     - _Parallax: 0.02
     - _Power: 0.1
@@ -189,6 +207,9 @@ Material:
     - _PrimaryFactor1: 1.02
     - _QueueControl: 0
     - _QueueOffset: 0
+    - _RampIntensity: 1
+    - _RampSoftness: 0.05
+    - _RampThreshold: 0.5
     - _ReceiveShadows: 1
     - _Scale: -1
     - _ScatteringPower: 0
@@ -229,11 +250,12 @@ Material:
     - _ZWrite: 1
     - __dirty: 0
     m_Colors:
+    - _BaseColor: {r: 0.1544044, g: 0.23270428, b: 0.1634237, a: 1}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _Color0: {r: 1, g: 1, b: 1, a: 0}
     - _ColorVariation: {r: 0.22042723, g: 0.3301887, b: 0.09552627, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _GradientColor: {r: 1, g: 1, b: 1, a: 1}
+    - _GradientColor: {r: 0.59928876, g: 0.44351476, b: 0.72327036, a: 1}
     - _MainColor: {r: 0.22186917, g: 0.3301887, b: 0.15471104, a: 1}
     - _ScatteringColor: {r: 0.56218994, g: 1, b: 0, a: 0}
     - _SpecularColor: {r: 0.39215687, g: 0.39215687, b: 0.39215687, a: 1}
